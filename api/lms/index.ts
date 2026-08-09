@@ -1,20 +1,21 @@
 import { Api } from "../../core/utils/abstract.ts";
 import { RouteError } from "../../core/utils/route-error.ts";
 import { lmsTables } from "./tables.ts";
+import { LmsQuery } from "./query.ts";
 
 export class LmsApi extends Api {
+  Queries = new LmsQuery(this.db);
+
   handlers = {
-    postCourses: (req, res) => {
+    postCourse: (req, res) => {
       const { slug, title, description, lessons, hours } = req.body;
-      const writeResult = this.db
-        .query(
-          /*sql*/ `
-        INSERT OR IGNORE INTO "courses"
-        ("slug", "title", "description", "lessons", "hours")
-        VALUES (?,?,?,?,?)
-        `,
-        )
-        .run(slug, title, description, lessons, hours);
+      const writeResult = this.Queries.insertCourse({
+        slug,
+        title,
+        description,
+        lessons,
+        hours,
+      });
       if (writeResult.changes === 0) {
         throw new RouteError(400, "erro ao criar curso");
       }
@@ -24,7 +25,7 @@ export class LmsApi extends Api {
         title: "curso criado",
       });
     },
-    postLessons: (req, res) => {
+    postLesson: (req, res) => {
       const {
         courseSlug,
         slug,
@@ -35,15 +36,16 @@ export class LmsApi extends Api {
         order,
         free,
       } = req.body;
-      const writeResult = this.db
-        .query(
-          /*sql*/ `
-        INSERT OR IGNORE INTO "lessons"
-        ("course_id", "slug", "title", "seconds",
-        "video", "description", "order", "free")
-        VALUES ((SELECT "id" FROM "courses" WHERE "slug" = ?),?,?,?,?,?,?,?)`,
-        )
-        .run(courseSlug, slug, title, seconds, video, description, order, free);
+      const writeResult = this.Queries.insertLessons({
+        courseSlug,
+        slug,
+        title,
+        seconds,
+        video,
+        description,
+        order,
+        free,
+      });
       if (writeResult.changes === 0) {
         throw new RouteError(400, "erro ao criar aula");
       }
@@ -53,12 +55,30 @@ export class LmsApi extends Api {
         title: "aula criada",
       });
     },
+    getCourses: (req, res) => {
+      const courses = this.Queries.selectCourses();
+      if (courses.length === 0) {
+        throw new RouteError(404, "nenhum curso encontrado");
+      }
+      res.status(200).json(courses);
+    },
+
+    getCourse: (req, res) => {
+      const { slug } = req.params;
+      const course = this.Queries.selectCourse(slug);
+      if (!course) {
+        throw new RouteError(404, "curso não encontrado");
+      }
+      res.status(200).json(course);
+    },
   } satisfies Api["handlers"];
   tables(): void {
     this.db.exec(lmsTables);
   }
   routes(): void {
-    this.router.post("/lms/courses", this.handlers.postCourses);
-    this.router.post("/lms/lessons", this.handlers.postLessons);
+    this.router.get("/lms/courses", this.handlers.getCourses);
+    this.router.get("/lms/course/:slug", this.handlers.getCourse);
+    this.router.post("/lms/course", this.handlers.postCourse);
+    this.router.post("/lms/lesson", this.handlers.postLesson);
   }
 }

@@ -1,10 +1,10 @@
-import type { Core } from '../core.ts';
-import type { Handler } from '../router.ts';
+import type { Core } from "../core.ts";
+import type { Handler } from "../router.ts";
 
 export abstract class CoreProvider {
   core: Core;
-  router: Core['router'];
-  db: Core['db'];
+  router: Core["router"];
+  db: Core["db"];
   constructor(core: Core) {
     this.core = core;
     this.router = core.router;
@@ -21,5 +21,12 @@ export abstract class Api extends CoreProvider {
   init() {
     this.tables();
     this.routes();
+  }
+}
+
+export abstract class Query {
+  db: Core["db"];
+  constructor(db: Core["db"]) {
+    this.db = db;
   }
 }
