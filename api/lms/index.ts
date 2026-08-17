@@ -1,15 +1,14 @@
-import { Api } from "../../core/utils/abstract.ts";
-import { RouteError } from "../../core/utils/route-error.ts";
-import { lmsTables } from "./tables.ts";
-import { LmsQuery } from "./query.ts";
+import { Api } from '../../core/utils/abstract.ts';
+import { RouteError } from '../../core/utils/route-error.ts';
+import { LmsQuery } from './query.ts';
+import { lmsTables } from './tables.ts';
 
 export class LmsApi extends Api {
-  Queries = new LmsQuery(this.db);
-
+  query = new LmsQuery(this.db);
   handlers = {
     postCourse: (req, res) => {
       const { slug, title, description, lessons, hours } = req.body;
-      const writeResult = this.Queries.insertCourse({
+      const writeResult = this.query.insertCourse({
         slug,
         title,
         description,
@@ -17,14 +16,15 @@ export class LmsApi extends Api {
         hours,
       });
       if (writeResult.changes === 0) {
-        throw new RouteError(400, "erro ao criar curso");
+        throw new RouteError(400, 'erro ao criar curso');
       }
       res.status(201).json({
         id: writeResult.lastInsertRowid,
         changes: writeResult.changes,
-        title: "curso criado",
+        title: 'curso criado',
       });
     },
+
     postLesson: (req, res) => {
       const {
         courseSlug,
@@ -36,7 +36,7 @@ export class LmsApi extends Api {
         order,
         free,
       } = req.body;
-      const writeResult = this.Queries.insertLessons({
+      const writeResult = this.query.insertLesson({
         courseSlug,
         slug,
         title,
@@ -47,75 +47,106 @@ export class LmsApi extends Api {
         free,
       });
       if (writeResult.changes === 0) {
-        throw new RouteError(400, "erro ao criar aula");
+        throw new RouteError(400, 'erro ao criar aula');
       }
       res.status(201).json({
         id: writeResult.lastInsertRowid,
         changes: writeResult.changes,
-        title: "aula criada",
+        title: 'aula criada',
       });
     },
+
     getCourses: (req, res) => {
-      const courses = this.Queries.selectCourses();
+      const courses = this.query.selectCourses();
       if (courses.length === 0) {
-        throw new RouteError(404, "nenhum curso encontrado");
+        throw new RouteError(404, 'nenhum curso encontrado');
       }
       res.status(200).json(courses);
     },
+
     getCourse: (req, res) => {
       const { slug } = req.params;
-      const course = this.Queries.selectCourse(slug);
-      const lessons = this.Queries.selectLessons(slug);
-
+      const course = this.query.selectCourse(slug);
+      const lessons = this.query.selectLessons(slug);
       if (!course) {
-        throw new RouteError(404, "curso não encontrado");
+        throw new RouteError(404, 'curso não encontrado');
       }
-      res.status(200).json({
-        ...course,
-        lessons,
-      });
+      const userId = 1;
+      let completed: {
+        lesson_id: number;
+        completed: string;
+      }[] = [];
+      if (userId) {
+        completed = this.query.selectLessonsCompleted(userId, course.id);
+      }
+      res.status(200).json({ course, lessons, completed });
     },
+
     getLesson: (req, res) => {
       const { courseSlug, lessonSlug } = req.params;
-      const lesson = this.Queries.selectLesson(courseSlug, lessonSlug);
-      const nav = this.Queries.selectLessonNav(courseSlug, lessonSlug);
-      const index = nav.findIndex((l) => l.slug == lesson?.slug);
-      const next = nav[index + 1] ?? null;
-      const prev = nav[index - 1] ?? null;
+      const lesson = this.query.selectLesson(courseSlug, lessonSlug);
+      const nav = this.query.selectLessonNav(courseSlug, lessonSlug);
       if (!lesson) {
-        throw new RouteError(404, "Aula não encontrado");
+        throw new RouteError(404, 'aula não encontrada');
+      }
+      const i = nav.findIndex((l) => l.slug === lesson.slug);
+      const prev = i === 0 ? null : nav.at(i - 1)?.slug;
+      const next = nav.at(i + 1)?.slug ?? null;
+
+      const userId = 1;
+      let completed = '';
+      if (userId) {
+        const lessonCompleted = this.query.selectLessonCompleted(
+          userId,
+          lesson.id,
+        );
+        if (lessonCompleted) completed = lessonCompleted.completed;
       }
 
-      res.status(200).json({ lesson, next, prev });
+      res.status(200).json({ ...lesson, prev, next, completed });
     },
+
     completeLesson: (req, res) => {
       const userId = 1;
       const { courseId, lessonId } = req.body;
-      const writeResult = this.Queries.insertLessonCompleted(
+      const writeResult = this.query.insertLessonCompleted(
         userId,
         courseId,
         lessonId,
       );
       if (writeResult.changes === 0) {
-        throw new RouteError(400, "erro ao completar aula");
+        throw new RouteError(400, 'erro ao completar aula');
       }
       res.status(201).json({
-        title: "aula concluída",
+        title: 'aula concluída',
       });
     },
-  } satisfies Api["handlers"];
+
+    resetCourse: (req, res) => {
+      const userId = 1;
+      const { courseId } = req.body;
+      const writeResult = this.query.deleteLessonsCompleted(userId, courseId);
+      if (writeResult.changes === 0) {
+        throw new RouteError(400, 'erro ao resetar curso');
+      }
+      res.status(200).json({
+        title: 'curso resetado',
+      });
+    },
+  } satisfies Api['handlers'];
   tables(): void {
     this.db.exec(lmsTables);
   }
   routes(): void {
-    this.router.get("/lms/courses", this.handlers.getCourses);
-    this.router.get("/lms/course/:slug", this.handlers.getCourse);
-    this.router.post("/lms/course", this.handlers.postCourse);
-    this.router.post("/lms/lesson", this.handlers.postLesson);
+    this.router.post('/lms/course', this.handlers.postCourse);
+    this.router.get('/lms/courses', this.handlers.getCourses);
+    this.router.get('/lms/course/:slug', this.handlers.getCourse);
+    this.router.delete('/lms/course/reset', this.handlers.resetCourse);
+    this.router.post('/lms/lesson', this.handlers.postLesson);
     this.router.get(
-      "/lms/lesson/:courseSlug/:lessonSlug",
+      '/lms/lesson/:courseSlug/:lessonSlug',
       this.handlers.getLesson,
     );
-    this.router.post("/lms/lesson", this.handlers.completeLesson);
+    this.router.post('/lms/lesson/complete', this.handlers.completeLesson);
   }
 }

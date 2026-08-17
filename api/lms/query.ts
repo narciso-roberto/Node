@@ -1,19 +1,18 @@
-import { Query } from "../../core/utils/abstract.ts";
-import { Core } from "../../core/core.ts";
+import { Query } from '../../core/utils/abstract.ts';
 
-interface CourseData {
+type CourseData = {
   id: number;
   slug: string;
   title: string;
   description: string;
   lessons: number;
   hours: number;
-  creatAt: string;
-}
+  created: string;
+};
 
-type CourseCreate = Omit<CourseData, "id" | "creatAt">;
+type CourseCreate = Omit<CourseData, 'id' | 'created'>;
 
-interface LessonData {
+type LessonData = {
   id: number;
   course_id: number;
   slug: string;
@@ -22,21 +21,17 @@ interface LessonData {
   video: string;
   description: string;
   order: number;
-  free: number;
+  free: number; // 0/1
   created: string;
-}
+};
 
-type LessonCreate = Omit<LessonData, "id" | "course_id" | "created"> & {
+type LessonCreate = Omit<LessonData, 'id' | 'course_id' | 'created'> & {
   courseSlug: string;
 };
 
 export class LmsQuery extends Query {
-  constructor(db: Core["db"]) {
-    super(db);
-  }
-
   insertCourse({ slug, title, description, lessons, hours }: CourseCreate) {
-    const query = this.db
+    return this.db
       .query(
         /*sql*/ `
         INSERT OR IGNORE INTO "courses"
@@ -45,10 +40,8 @@ export class LmsQuery extends Query {
         `,
       )
       .run(slug, title, description, lessons, hours);
-    return query;
   }
-
-  insertLessons({
+  insertLesson({
     courseSlug,
     slug,
     title,
@@ -58,7 +51,7 @@ export class LmsQuery extends Query {
     order,
     free,
   }: LessonCreate) {
-    const query = this.db
+    return this.db
       .query(
         /*sql*/ `
         INSERT OR IGNORE INTO "lessons"
@@ -67,7 +60,6 @@ export class LmsQuery extends Query {
         VALUES ((SELECT "id" FROM "courses" WHERE "slug" = ?),?,?,?,?,?,?,?)`,
       )
       .run(courseSlug, slug, title, seconds, video, description, order, free);
-    return query;
   }
 
   selectCourses() {
@@ -77,7 +69,7 @@ export class LmsQuery extends Query {
         SELECT * FROM "courses"
         ORDER BY "created" ASC LIMIT 100`,
       )
-      .all() as unknown as CourseData[];
+      .all() as CourseData[];
   }
 
   selectCourse(slug: string) {
@@ -98,7 +90,7 @@ export class LmsQuery extends Query {
         WHERE "course_id" = (SELECT "id" FROM "courses" WHERE "slug" = ?)
         ORDER BY "order" ASC`,
       )
-      .all(courseSlug) as unknown as LessonData[];
+      .all(courseSlug) as LessonData[];
   }
 
   selectLesson(courseSlug: string, lessonSlug: string) {
@@ -132,5 +124,35 @@ export class LmsQuery extends Query {
         (?,?,?)`,
       )
       .run(userId, courseId, lessonId);
+  }
+
+  selectLessonCompleted(userId: number, lessonId: number) {
+    return this.db
+      .prepare(
+        /*sql*/ `
+        SELECT "completed" FROM "lessons_completed" WHERE
+        "user_id" = ? AND "lesson_id" = ?`,
+      )
+      .get(userId, lessonId) as { completed: string } | undefined;
+  }
+
+  selectLessonsCompleted(userId: number, courseId: number) {
+    return this.db
+      .prepare(
+        /*sql*/ `
+        SELECT "lesson_id", "completed" FROM "lessons_completed" WHERE
+        "user_id" = ? AND "course_id" = ?`,
+      )
+      .all(userId, courseId) as { lesson_id: number; completed: string }[];
+  }
+
+  deleteLessonsCompleted(userId: number, courseId: number) {
+    return this.db
+      .prepare(
+        /*sql*/ `
+        DELETE FROM "lessons_completed" WHERE
+        "user_id" = ? AND "course_id" = ?`,
+      )
+      .run(userId, courseId);
   }
 }
