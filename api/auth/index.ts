@@ -20,7 +20,7 @@ export class AuthApi extends Api {
         password_hash,
       });
       if (writeResult.changes === 0) {
-        throw new RouteError(400, "erro ao criar usuário");
+        throw new RouteError(400, "erro ao criar usuário.");
       }
       res.status(201).json({ title: "usuário criado" });
     },
@@ -37,13 +37,13 @@ export class AuthApi extends Api {
       if (!user || password !== user.password_hash) {
         throw new RouteError(404, "email ou senha incorretos");
       }
-      const { sid_hash } = await this.session.create({
+      const { sid } = await this.session.create({
         userId: user.id,
         ip: req.ip,
         ua: req.headers["user-agent"] ?? "",
       });
-      console.log(sid_hash);
-      res.setHeader("Set-Cookie", `sid=${sid_hash}; Path=/`);
+      console.log(sid);
+      res.setHeader("Set-Cookie", `sid=${sid}; Path=/`);
       res.status(200).json("teste");
     },
   } satisfies Api["handlers"];
