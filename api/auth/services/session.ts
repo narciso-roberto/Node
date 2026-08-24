@@ -3,6 +3,8 @@ import { AuthQuery } from "../query.ts";
 import { randomBytesAsync } from "../utils.ts";
 import { sha256 } from "../utils.ts";
 
+const ttlSec = 60 * 60 * 24 * 15;
+
 export class SessionService extends CoreProvider {
   query = new AuthQuery(this.db);
 
@@ -11,6 +13,9 @@ export class SessionService extends CoreProvider {
     const sid_hash = sha256(sid);
     const expires_ms = Date.now() + 60 * 60 * 24 * 15 * 1000;
     this.query.insertSession({ sid_hash, expires_ms, user_id: userId, ip, ua });
-    return { sid };
+
+    const cookie = `__Secure-sid=${sid}; Path=/; Max-Age=${ttlSec}; HttpOnly; Secure; SameSite=Lax`;
+
+    return { cookie };
   }
 }

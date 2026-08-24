@@ -15,6 +15,20 @@ type UserData = {
 
 type UserCreate = Omit<UserData, "id" | "created" | "updated">;
 
+type SessionData = {
+  sid_hash: Buffer;
+  user_id: number;
+  created: number;
+  expires: number;
+  ip: string;
+  ua: string;
+  revoked: number;
+};
+
+type SessionCreate = Omit<SessionData, "created" | "revoked" | "expires"> & {
+  expires_ms: number;
+};
+
 export class AuthQuery extends Query {
   insertUser({ name, username, email, role, password_hash }: UserCreate) {
     return this.db
@@ -27,7 +41,7 @@ export class AuthQuery extends Query {
       .run(name, username, email, role, password_hash);
   }
 
-  insertSession({ sid_hash, user_id, expires_ms, ip, ua }) {
+  insertSession({ sid_hash, user_id, expires_ms, ip, ua }: SessionCreate) {
     return this.db
       .query(
         /*sql*/ `
